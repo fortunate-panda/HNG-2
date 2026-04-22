@@ -106,6 +106,9 @@ jobs:
   security-scan:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - name: Download Image Artifacts
         uses: actions/download-artifact@v4
