@@ -243,31 +243,38 @@ jobs:
 
       - name: Scripted Rolling Update
         run: |
+          # 1. Create the infrastructure if it doesn't exist
           docker network create app-network || true
           docker run -d --name redis --network app-network redis:7-alpine || true
           
           echo "Starting old container..."
-          docker run -d --name api-old --network app-network -e REDIS_URL=redis -p 8000:8000 localhost:5000/api:latest
+          docker run -d --name api-old --network app-network -e REDIS_URL=redis -p 8000:8000 localhost:5000/api:latest || true
           sleep 5
           
           echo "Starting new container..."
+          # Note: We use port 8001 here so it doesn't conflict with api-old
           docker run -d --name api-new --network app-network -e REDIS_URL=redis -p 8001:8000 localhost:5000/api:latest
           
           TIMEOUT=60
           ELAPSED=0
           while [ $ELAPSED -lt $TIMEOUT ]; do
+            # Use tr to strip quotes from the Docker status
             HEALTH=$(docker inspect --format='{{json .State.Health.Status}}' api-new | tr -d '"')
+            
             if [ "$HEALTH" == "healthy" ]; then
               echo "New container is healthy! Finalizing rollout..."
-              docker stop api-old && docker rm api-old
+              docker stop api-old || true
+              docker rm api-old || true
               docker rename api-new api-old
               exit 0
             fi
-            echo "Waiting for healthcheck... ($ELAPSED/60s)"
+            
+            echo "Waiting for healthcheck... ($ELAPSED/60s) Status: $HEALTH"
             sleep 5
             ELAPSED=$((ELAPSED + 5))
           done
           
           echo "Rollback initiated: New container failed healthcheck."
+          docker logs api-new
           docker stop api-new && docker rm api-new
           exit 1
