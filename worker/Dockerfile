@@ -11,6 +11,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Create a non-root user. 
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 # We install 'procps' here so we have access to the 'ps' command for our healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -19,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy installed wheels and requirements from builder
 COPY --from=builder /app/wheels /wheels
 COPY --from=builder /app/requirements.txt .
+
 
 # Install from wheels securely
 RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt

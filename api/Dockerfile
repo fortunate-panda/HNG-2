@@ -11,6 +11,8 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Create a non-root user and install curl for the healthcheck
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
