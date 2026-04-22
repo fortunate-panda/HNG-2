@@ -22,6 +22,8 @@ services:
 
   api:
     build: ./api
+    ports:
+      - "8000:8000"
     networks:
       - app-network
     depends_on:
