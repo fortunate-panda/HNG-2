@@ -5,7 +5,7 @@ import os
 
 app = FastAPI()
 
-host = os.getenv("REDIS_HOST", "localhost")
+host = os.getenv("REDIS_URL", "redis")
 r = redis.Redis(host=host, port=6379)
 
 @app.post("/jobs")
