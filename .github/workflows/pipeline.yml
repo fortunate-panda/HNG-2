@@ -197,7 +197,6 @@ jobs:
           echo "Waiting for API..."
           sleep 20
           
-          # Use jq with -r to get the RAW string without braces or quotes
           RAW_ID=$(curl -s -X POST http://localhost:8000/jobs \
             -H "Content-Type: application/json" \
             -d '{"title": "Pipeline Test"}' | jq -r '.job_id')
@@ -209,11 +208,21 @@ jobs:
             exit 1
           fi
 
-          # The rest of your loop remains the same
           for i in {1..12}; do
             RESPONSE=$(curl -s http://localhost:8000/jobs/$RAW_ID)
             STATUS=$(echo $RESPONSE | jq -r '.status // empty')
-            # ...
+            
+            echo "Attempt $i - Current Status: $STATUS"
+
+            if [ "$STATUS" == "completed" ]; then
+              echo "Integration test passed!"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Integration test failed! Job never completed."
+          exit 1
           
       - name: Tear Down Stack
         if: always()
