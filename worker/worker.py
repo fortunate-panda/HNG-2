@@ -5,7 +5,7 @@ import signal
 
 # This looks for an environment variable named REDIS_HOST. 
 # If it doesn't find one, it defaults to "localhost".
-redis_host = os.getenv("REDIS_HOST", "localhost")
+redis_host = os.getenv("REDIS_URL", "redis")
 r = redis.Redis(host=redis_host, port=6379)
 
 def process_job(job_id):
