@@ -243,13 +243,11 @@ jobs:
 
       - name: Scripted Rolling Update 
         run: |
-          # 1. Start a mock "old" container to simulate what's currently running in production
-          docker run -d --name api-old -p 8000:8000 localhost:5000/api:latest
-          sleep 5
-          
-          # 2. Start the "new" container alongside it on a different port
-          echo "Starting new container..."
-          docker run -d --name api-new -p 8001:8000 localhost:5000/api:latest
+          # Line 246 (api-old)
+          docker run -d --name api-old --network app-network -e REDIS_URL=redis -p 8000:8000 localhost:5000/api:latest
+
+          # Line 251 (api-new)
+          docker run -d --name api-new --network app-network -e REDIS_URL=redis -p 8001:8000 localhost:5000/api:latest
           
           # 3. Monitor health status for up to 60 seconds
           TIMEOUT=60
