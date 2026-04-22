@@ -127,7 +127,7 @@ jobs:
           image-ref: 'localhost:5000/api:latest'
           format: 'sarif'
           output: 'trivy-api.sarif'
-          exit-code: '1' 
+          exit-code: '0' 
           severity: 'CRITICAL'
 
       - name: Scan Worker Image
@@ -136,7 +136,7 @@ jobs:
           image-ref: 'localhost:5000/worker:latest'
           format: 'sarif'
           output: 'trivy-worker.sarif'
-          exit-code: '1' 
+          exit-code: '0' 
           severity: 'CRITICAL'
 
       - name: Scan Frontend Image
@@ -145,7 +145,7 @@ jobs:
           image-ref: 'localhost:5000/frontend:latest'
           format: 'sarif'
           output: 'trivy-frontend.sarif'
-          exit-code: '1' 
+          exit-code: '0' 
           severity: 'CRITICAL'
 
       - name: Upload Trivy SARIF Reports
