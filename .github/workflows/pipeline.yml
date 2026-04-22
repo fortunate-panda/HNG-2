@@ -188,8 +188,8 @@ jobs:
       
       - name: Start Stack
         run: |
-          # Creates a temporary .env so docker-compose doesn't fail
-          cp .env.example .env
+          echo "REDIS_URL=redis" >> .env
+          echo "API_URL=http://api:8000" >> .env
           docker compose up -d
         
       - name: Poll Application Script
