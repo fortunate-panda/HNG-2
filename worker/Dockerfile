@@ -12,7 +12,9 @@ WORKDIR /app
 
 # Create a non-root user. 
 # We install 'procps' here so we have access to the 'ps' command for our healthcheck
-RUN useradd -m appuser && apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*t/lists/*
 
 # Copy installed wheels and requirements from builder
 COPY --from=builder /app/wheels /wheels
