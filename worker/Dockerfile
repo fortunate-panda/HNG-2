@@ -2,30 +2,35 @@
 FROM python:3.10-slim AS builder
 WORKDIR /app
 COPY requirements.txt .
-# Build wheels instead of installing directly to keep the final image clean
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+# Fetch all dependencies and compile them to wheels
+RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
 # Stage 2: Runner
 FROM python:3.10-slim
 WORKDIR /app
 
-# Create a non-root user
-RUN useradd -m appuser && apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Create a non-root user. 
+# We install 'procps' here so we have access to the 'ps' command for our healthcheck
+RUN useradd -m appuser && apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
 
-# Copy installed wheels from builder and install them
+# Copy installed wheels and requirements from builder
 COPY --from=builder /app/wheels /wheels
 COPY --from=builder /app/requirements.txt .
-RUN pip install --no-cache /wheels/*
 
-# Copy the actual application code
-COPY . .
+# Install from wheels securely
+RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt
 
-# Set permissions and switch user
-RUN chown -R appuser:appuser /app
+# Copy the application code and set ownership in ONE step to pass Hadolint
+COPY --chown=appuser:appuser . .
+
+# Switch to the non-root user
 USER appuser
 
-# The working Healthcheck
+# The Worker Healthcheck: 
+# Checks if a python process is actively running. If the worker crashes, this fails.
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
+  CMD ps aux | grep "[p]ython" || exit 1
 
-CMD ["uvicorn", "worker:app", "--host", "0.0.0.0", "--port", "8000"]
+# Note: The '-u' flag forces stdout to be unbuffered so logs show up immediately in Docker
+CMD ["python", "-u", "worker.py"]

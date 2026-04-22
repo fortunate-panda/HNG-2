@@ -2,26 +2,28 @@
 FROM python:3.10-slim AS builder
 WORKDIR /app
 COPY requirements.txt .
-# Build wheels instead of installing directly to keep the final image clean
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+# Removed --no-deps so pip fetches all necessary sub-dependencies
+RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
 # Stage 2: Runner
 FROM python:3.10-slim
 WORKDIR /app
 
-# Create a non-root user
+# Create a non-root user and install curl for the healthcheck
 RUN useradd -m appuser && apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Copy installed wheels from builder and install them
+# Copy installed wheels and requirements from builder
 COPY --from=builder /app/wheels /wheels
 COPY --from=builder /app/requirements.txt .
-RUN pip install --no-cache /wheels/*
 
-# Copy the actual application code
-COPY . .
+# Use the correct --no-cache-dir flag and standard --find-links method
+RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt
 
-# Set permissions and switch user
-RUN chown -R appuser:appuser /app
+# Copy the application code and set ownership in ONE step to pass Hadolint
+COPY --chown=appuser:appuser . .
+
+# Switch to the non-root user
 USER appuser
 
 # The working Healthcheck
