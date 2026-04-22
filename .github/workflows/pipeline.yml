@@ -241,38 +241,33 @@ jobs:
       - name: Load API Image
         run: docker load < api.tar
 
-      - name: Scripted Rolling Update 
+      - name: Scripted Rolling Update
         run: |
-          # Line 246 (api-old)
+          docker network create app-network || true
+          docker run -d --name redis --network app-network redis:7-alpine || true
+          
+          echo "Starting old container..."
           docker run -d --name api-old --network app-network -e REDIS_URL=redis -p 8000:8000 localhost:5000/api:latest
-
-          # Line 251 (api-new)
+          sleep 5
+          
+          echo "Starting new container..."
           docker run -d --name api-new --network app-network -e REDIS_URL=redis -p 8001:8000 localhost:5000/api:latest
           
-          # 3. Monitor health status for up to 60 seconds
           TIMEOUT=60
           ELAPSED=0
-          
           while [ $ELAPSED -lt $TIMEOUT ]; do
-            # Extract health status using docker inspect
             HEALTH=$(docker inspect --format='{{json .State.Health.Status}}' api-new | tr -d '"')
-            
             if [ "$HEALTH" == "healthy" ]; then
-              echo "New container is healthy! Proceeding with rollout..."
-              # Stop and remove old, then rename new to take its place
-              docker stop api-old
-              docker rm api-old
+              echo "New container is healthy! Finalizing rollout..."
+              docker stop api-old && docker rm api-old
               docker rename api-new api-old
-              echo "Rolling update complete. Zero downtime achieved."
               exit 0
             fi
-            
+            echo "Waiting for healthcheck... ($ELAPSED/60s)"
             sleep 5
-            ELAPSED=$((ELAPSED+5))
+            ELAPSED=$((ELAPSED + 5))
           done
           
-          # 4. If we exit the loop, it means 60 seconds passed without becoming healthy
-          echo "Rollback initiated: New container failed to become healthy within 60s."
-          docker stop api-new
-          docker rm api-new
-          exit 1 # Fail the pipeline, but the old container is still safely running
+          echo "Rollback initiated: New container failed healthcheck."
+          docker stop api-new && docker rm api-new
+          exit 1
