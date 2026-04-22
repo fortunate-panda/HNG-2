@@ -1,0 +1,62 @@
+version: '3.8'
+
+networks:
+  app-network:
+    driver: bridge
+
+services:
+  redis:
+    image: redis:7-alpine
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: '256M'
+
+  api:
+    build: ./api
+    networks:
+      - app-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=${REDIS_URL} # Make sure this is defined in your root .env
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: '512M'
+
+  worker:
+    build: ./worker
+    networks:
+      - app-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=${REDIS_URL}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: '512M'
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    depends_on:
+      - api
+    environment:
+      - API_URL=http://api:8000

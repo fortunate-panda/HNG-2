@@ -1,0 +1,140 @@
+name: DevOps Stage 2 Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint Python (API & Worker)
+        run: |
+          pip install flake8
+          flake8 ./api ./worker --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Lint Node.js (Frontend)
+        run: |
+          cd frontend
+          npm install
+          npx eslint . || true # (Adjust if you have strict eslint rules)
+
+      - name: Lint Dockerfiles
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ./api/Dockerfile
+          # You will need to add steps for the other Dockerfiles too
+test:
+    needs: lint # This ensures test ONLY runs if lint passes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies & Test
+        run: |
+          cd api
+          pip install -r requirements.txt pytest pytest-cov pytest-mock
+          # This runs tests and generates a coverage report
+          pytest --cov=./ --cov-report=xml 
+          
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: api/coverage.xml
+build:
+    needs: test
+    runs-on: ubuntu-latest
+    services:
+      registry: # This creates our temporary image locker
+        image: registry:2
+        ports:
+          - 5000:5000
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build and Push API Image
+        run: |
+          # We tag it with 'localhost:5000' so it pushes to our temporary locker
+          docker build -t localhost:5000/api:${{ github.sha }} -t localhost:5000/api:latest ./api
+          docker push localhost:5000/api --all-tags
+          
+      # You will duplicate the run block above for the Worker and Frontend
+security-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    steps:
+      - name: Run Trivy vulnerability scanner on API
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'localhost:5000/api:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          exit-code: '1' # Fails the pipeline on critical
+          severity: 'CRITICAL'
+          
+      - name: Upload Trivy SARIF Report
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() # Uploads even if the scan fails
+        with:
+          sarif_file: 'trivy-results.sarif'
+integration-test:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Start Stack
+        run: docker compose up -d
+        
+      - name: Poll Application Script
+        run: |
+          # Give it a few seconds to boot
+          sleep 10 
+          # Example curl to create a job (you'll need to check your exact API route)
+          JOB_ID=$(curl -s -X POST http://localhost:8000/jobs -H "Content-Type: application/json" -d '{"task": "test"}' | jq -r .id)
+          
+          # We loop and check the status every 5 seconds
+          for i in {1..12}; do
+            STATUS=$(curl -s http://localhost:8000/jobs/$JOB_ID | jq -r .status)
+            if [ "$STATUS" == "completed" ]; then
+              echo "Integration test passed!"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Integration test failed! Job never completed."
+          exit 1
+          
+      - name: Tear Down Stack
+        if: always()
+        run: docker compose down
+deploy:
+    needs: integration-test
+    if: github.ref == 'refs/heads/main' # Strictly runs on main branch only
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rolling Update Bash Script
+        run: |
+          echo "In a real environment, you would SSH into your server here."
+          echo "You pull the new image, start it with a temporary name, and monitor its health."
+          echo "If docker inspect shows 'healthy', you stop the old container."
+          echo "If 60s pass, you kill the new container and fail this job."
+          # You will need to write the specific bash loop for this!
+
+
