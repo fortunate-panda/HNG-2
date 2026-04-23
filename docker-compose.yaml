@@ -7,6 +7,7 @@ networks:
 services:
   redis:
     image: redis:7-alpine
+    restart: always                  # <--- Added
     networks:
       - app-network
     healthcheck:
@@ -22,6 +23,7 @@ services:
 
   api:
     build: ./api
+    restart: always                  # <--- Added
     ports:
       - "8000:8000"
     networks:
@@ -30,7 +32,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      - REDIS_URL=${REDIS_URL} # Make sure this is defined in your root .env
+      - REDIS_URL=${REDIS_URL}
     deploy:
       resources:
         limits:
@@ -39,6 +41,7 @@ services:
 
   worker:
     build: ./worker
+    restart: always                  # <--- Added
     networks:
       - app-network
     depends_on:
@@ -54,12 +57,18 @@ services:
 
   frontend:
     build: ./frontend
+    restart: always                  # <--- Added
     ports:
       - "3000:3000"
     networks:
       - app-network
     depends_on:
-        api:
-          condition: service_healthy
+      api:
+        condition: service_healthy
     environment:
       - API_URL=${API_URL}
+    deploy:                          # <--- Added  limits block
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: '256M'
